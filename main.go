@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -34,18 +35,21 @@ func main() {
 	var wg sync.WaitGroup
 	var cities = []string{"Amsterdam", "Wien", "Moskow", "Warsaw", "Paris"}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
 	for _, city := range cities {
 		wg.Add(1)
 		go func(city string) {
 			defer wg.Done()
 
-			coords, err := GetCoords(city)
+			coords, err := GetCoords(ctx, city)
 			if err != nil {
 				fmt.Println("Error fetching coordinates:", err)
 				return
 			}
 
-			weather, err := SendWeatherInfo(coords.Lat, coords.Lon)
+			weather, err := SendWeatherInfo(ctx, coords.Lat, coords.Lon)
 			if err != nil {
 				fmt.Println("Error fetching weather info:", err)
 				return
@@ -61,12 +65,19 @@ func main() {
 	fmt.Println(tt)
 }
 
-func GetCoords(city string) (GeoRespch, error) {
+func GetCoords(ctx context.Context, city string) (GeoRespch, error) {
 	geocodeURL := fmt.Sprintf("https://nominatim.openstreetmap.org/search?city=%s&format=json", city)
-	geocodeResp, err := http.Get(geocodeURL)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, geocodeURL, nil)
+	if err != nil {
+		return GeoRespch{}, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	geocodeResp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return GeoRespch{}, fmt.Errorf("failed to fetch coordinates: %w", err)
 	}
+
 	defer geocodeResp.Body.Close()
 
 	var geocode []GeoRespch
@@ -78,12 +89,21 @@ func GetCoords(city string) (GeoRespch, error) {
 	return GeoRespch{Lat: lat, Lon: lon}, nil
 }
 
-func SendWeatherInfo(lat, lon string) (WeatherResponseResult, error) {
+func SendWeatherInfo(ctx context.Context, lat, lon string) (WeatherResponseResult, error) {
 	weatherURL := fmt.Sprintf("https://api.open-meteo.com/v1/forecast?latitude=%s&longitude=%s&current_weather=true", lat, lon)
-	weatherRespch, err := http.Get(weatherURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, weatherURL, nil)
+
 	if err != nil {
 		return WeatherResponseResult{}, fmt.Errorf("failed to fetch weather info: %w", err)
 	}
+
+	weatherRespch, err := http.DefaultClient.Do(req)
+
+	if err != nil {
+		return WeatherResponseResult{}, fmt.Errorf("failed to fetch weather info: %w", err)
+
+	}
+
 	defer weatherRespch.Body.Close()
 
 	var weather WeatherResponse

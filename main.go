@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -45,13 +46,13 @@ func main() {
 
 			coords, err := GetCoords(ctx, city)
 			if err != nil {
-				fmt.Println("Error fetching coordinates:", err)
+				log.Fatalln(err)
 				return
 			}
 
 			weather, err := SendWeatherInfo(ctx, coords.Lat, coords.Lon)
 			if err != nil {
-				fmt.Println("Error fetching weather info:", err)
+				log.Fatalln(err)
 				return
 			}
 
